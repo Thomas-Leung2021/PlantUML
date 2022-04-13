@@ -1,0 +1,71 @@
+@startuml My simple order request
+skinparam Style strictuml
+skinparam SequenceMessageAlignment center
+
+header CompanyName
+footer PAGE %page% of %lastpage%
+title "Orders Flow"
+' If we want to show empty space or different name, we can use 'as'
+' creating participant is option, by default it is participant
+actor "Web User" as WebUser
+participant "Front End" as Portal
+participant Gateway
+participant "Identity\nServer" as IdentityServer #yellow
+participant "Rest Api" as RestApi
+database OrdersDatabase
+entity "External \n Shipping Service" as ExternalShippingService
+
+autonumber
+WebUser -> Portal : Orders Request
+' activate starts lifecycle of a participant (the bar)
+' ++ is a shorthand of activate, and -- is a short hand of deactivate
+activate Portal
+' group will automatically wrap around objects between group and end
+' to make things more organize
+group Step: Authentication
+    Portal -> Gateway ++: GET /api/v1/orders\nBearer Token
+    Gateway -> IdentityServer ++: Authenticate Token
+    ' --> create dotted line
+    IdentityServer --> IdentityServer : Validate\nToken
+    ' [#green] set color
+    IdentityServer -[#green]> Gateway : Success, Token Validated
+    else Authentication Failed
+    ' since return are on the same step, we can use autonumber to regenerate the numbering
+    autonumber 5
+    IdentityServer -[#red]> Gateway -- : Request Failed
+    Gateway -[#red]> Portal : Authnetication Failure
+    Portal -[#red]> WebUser : Login Again
+    ' create a note
+    note right : Authentication Failed
+end
+
+autonumber 6
+group Call Order API
+    Gateway -> RestApi ++ : GET api/v1/orders
+    ' use dotted line to represent internal processing
+    RestApi --[#blue]> RestApi: Do Some\nProcessing
+    group Database Interaction
+        ' add separator numbering
+        autonumber 8.1
+        RestApi -> OrderDatabase ++ : Query Orders
+        OrderDatabase -> RestApi --: Orders
+    end
+    ' remove seperator numbering
+    autonumber inc A
+    ' Create loop
+    loop Find shipping status
+        ' Participants can be created on top of first invocation using 'create'
+        create ExternalShippingService
+        RestApi -> ExternalShippingService ++ : Find shipping status
+        ExternalShippingService -> RestApi -- : Return Shipping Response
+    end
+
+    autonumber 9
+    RestApi -> Portal -- : Orders
+end
+
+Portal -> WebUser : Response
+deactivate Portal
+
+
+@enduml
